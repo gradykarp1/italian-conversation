@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getSession } from "@/lib/auth";
 import { getUserById, getRecentSessions, getSessionCount } from "@/lib/db";
 import { buildSystemPrompt, buildUserContext, GREETING_PROMPT } from "@/lib/prompts";
+import { retrieveRelevantContext } from "@/lib/embeddings";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -24,10 +25,34 @@ export async function POST(request: NextRequest) {
     // Build user context from past sessions
     const sessionCount = await getSessionCount(user.id);
     const recentSessions = await getRecentSessions(user.id, 3);
-    const userContext = buildUserContext(
+    let userContext = buildUserContext(
       sessionCount,
       recentSessions.map((s) => ({ summary: s.summary, skill_notes: s.skill_notes }))
     );
+
+    // For non-greeting messages, retrieve semantically relevant past context
+    if (!isGreeting && message && sessionCount > 0) {
+      try {
+        // Build context from current conversation to find relevant past sessions
+        const currentContext = history
+          .slice(-4) // Last 4 messages
+          .map((h: { content: string }) => h.content)
+          .join(" ") + " " + message;
+
+        const relevantContext = await retrieveRelevantContext(
+          user.id,
+          currentContext,
+          2 // Retrieve up to 2 relevant past sessions
+        );
+
+        if (relevantContext) {
+          userContext = userContext + "\n\n" + relevantContext;
+        }
+      } catch (retrievalError) {
+        // Log but don't fail if retrieval fails
+        console.error("Context retrieval failed:", retrievalError);
+      }
+    }
 
     // Build system prompt
     const systemPrompt = buildSystemPrompt(

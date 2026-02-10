@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSession } from "@/lib/auth";
-import { getUserById, createSession, getRecentSessions, updateUserSkill } from "@/lib/db";
+import { getUserById, createSession, getRecentSessions, updateUserSkill, storeSessionEmbedding } from "@/lib/db";
+import { generateEmbedding, createEmbeddingContent } from "@/lib/embeddings";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -113,6 +114,21 @@ export async function POST(request: NextRequest) {
       skillNotes,
       durationSeconds || 0
     );
+
+    // Generate and store embedding for semantic search
+    try {
+      const embeddingContent = createEmbeddingContent(summary, skillNotes, transcript);
+      const embedding = await generateEmbedding(embeddingContent);
+      await storeSessionEmbedding(
+        savedSession.id,
+        user.id,
+        embedding,
+        embeddingContent.slice(0, 500) // Store truncated content for reference
+      );
+    } catch (embeddingError) {
+      // Log but don't fail the request if embedding fails
+      console.error("Failed to generate session embedding:", embeddingError);
+    }
 
     // Update user skill level
     if (skillNotes) {

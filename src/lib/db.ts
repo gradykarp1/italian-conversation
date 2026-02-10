@@ -12,6 +12,10 @@ function getDb() {
 // Initialize database tables
 export async function initDatabase() {
   const sql = getDb();
+
+  // Enable pgvector extension for semantic search
+  await sql`CREATE EXTENSION IF NOT EXISTS vector`;
+
   await sql`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -46,6 +50,24 @@ export async function initDatabase() {
       used BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
+  `;
+
+  // Session embeddings for semantic search
+  await sql`
+    CREATE TABLE IF NOT EXISTS session_embeddings (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      embedding vector(1536),
+      content_summary TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
+  // Create index for faster similarity search
+  await sql`
+    CREATE INDEX IF NOT EXISTS session_embeddings_user_idx
+    ON session_embeddings(user_id)
   `;
 }
 
@@ -172,4 +194,73 @@ export async function updateUserPassword(userId: number, passwordHash: string) {
     SET password_hash = ${passwordHash}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${userId}
   `;
+}
+
+// Embedding operations
+export async function storeSessionEmbedding(
+  sessionId: number,
+  userId: number,
+  embedding: number[],
+  contentSummary: string
+) {
+  const sql = getDb();
+  // Convert embedding array to pgvector format
+  const embeddingStr = `[${embedding.join(",")}]`;
+  await sql`
+    INSERT INTO session_embeddings (session_id, user_id, embedding, content_summary)
+    VALUES (${sessionId}, ${userId}, ${embeddingStr}::vector, ${contentSummary})
+    ON CONFLICT DO NOTHING
+  `;
+}
+
+export async function findSimilarSessions(
+  userId: number,
+  queryEmbedding: number[],
+  limit: number = 3,
+  excludeSessionId?: number
+) {
+  const sql = getDb();
+  const embeddingStr = `[${queryEmbedding.join(",")}]`;
+
+  // Use cosine distance for similarity (smaller = more similar)
+  const rows = excludeSessionId
+    ? await sql`
+        SELECT
+          se.session_id,
+          se.content_summary,
+          s.date,
+          s.summary,
+          s.skill_notes,
+          1 - (se.embedding <=> ${embeddingStr}::vector) as similarity
+        FROM session_embeddings se
+        JOIN sessions s ON se.session_id = s.id
+        WHERE se.user_id = ${userId}
+          AND se.session_id != ${excludeSessionId}
+        ORDER BY se.embedding <=> ${embeddingStr}::vector
+        LIMIT ${limit}
+      `
+    : await sql`
+        SELECT
+          se.session_id,
+          se.content_summary,
+          s.date,
+          s.summary,
+          s.skill_notes,
+          1 - (se.embedding <=> ${embeddingStr}::vector) as similarity
+        FROM session_embeddings se
+        JOIN sessions s ON se.session_id = s.id
+        WHERE se.user_id = ${userId}
+        ORDER BY se.embedding <=> ${embeddingStr}::vector
+        LIMIT ${limit}
+      `;
+
+  return rows;
+}
+
+export async function hasSessionEmbedding(sessionId: number) {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT 1 FROM session_embeddings WHERE session_id = ${sessionId} LIMIT 1
+  `;
+  return rows.length > 0;
 }
