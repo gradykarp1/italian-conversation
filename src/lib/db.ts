@@ -30,6 +30,17 @@ export async function initDatabase() {
       duration_seconds INTEGER DEFAULT 0
     )
   `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      token TEXT NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
 }
 
 // User operations
@@ -91,4 +102,36 @@ export async function getSessionCount(userId: number) {
     SELECT COUNT(*) as count FROM sessions WHERE user_id = ${userId}
   `;
   return parseInt(rows[0].count);
+}
+
+// Password reset operations
+export async function createPasswordResetToken(userId: number, token: string, expiresAt: Date) {
+  await sql`
+    INSERT INTO password_reset_tokens (user_id, token, expires_at)
+    VALUES (${userId}, ${token}, ${expiresAt.toISOString()})
+  `;
+}
+
+export async function getPasswordResetToken(token: string) {
+  const rows = await sql`
+    SELECT * FROM password_reset_tokens
+    WHERE token = ${token}
+      AND used = FALSE
+      AND expires_at > CURRENT_TIMESTAMP
+  `;
+  return rows[0] || null;
+}
+
+export async function markTokenUsed(tokenId: number) {
+  await sql`
+    UPDATE password_reset_tokens SET used = TRUE WHERE id = ${tokenId}
+  `;
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  await sql`
+    UPDATE users
+    SET password_hash = ${passwordHash}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${userId}
+  `;
 }
