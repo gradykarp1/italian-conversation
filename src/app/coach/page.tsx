@@ -330,6 +330,12 @@ export default function CoachPage() {
           >
             [Sessions]
           </Link>
+          <Link
+            href="/settings"
+            className="text-[var(--foreground)] opacity-60 hover:opacity-100"
+          >
+            [Settings]
+          </Link>
           <button
             onClick={handleLogout}
             className="text-[var(--foreground)] opacity-60 hover:opacity-100"

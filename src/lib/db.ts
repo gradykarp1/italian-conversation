@@ -23,9 +23,15 @@ export async function initDatabase() {
       password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
       skill_level TEXT DEFAULT 'beginner',
+      tts_speed REAL DEFAULT 0.85,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
+  `;
+
+  // Add tts_speed column if it doesn't exist (for existing databases)
+  await sql`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS tts_speed REAL DEFAULT 0.85
   `;
 
   await sql`
@@ -101,6 +107,21 @@ export async function updateUserSkill(userId: number, skillLevel: string) {
     SET skill_level = ${skillLevel}, updated_at = CURRENT_TIMESTAMP
     WHERE id = ${userId}
   `;
+}
+
+export async function updateUserTtsSpeed(userId: number, ttsSpeed: number) {
+  const sql = getDb();
+  await sql`
+    UPDATE users
+    SET tts_speed = ${ttsSpeed}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${userId}
+  `;
+}
+
+export async function getUserTtsSpeed(userId: number): Promise<number> {
+  const sql = getDb();
+  const rows = await sql`SELECT tts_speed FROM users WHERE id = ${userId}`;
+  return rows[0]?.tts_speed ?? 0.85;
 }
 
 // Session operations

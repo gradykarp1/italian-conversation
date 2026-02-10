@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSession } from "@/lib/auth";
+import { getUserTtsSpeed } from "@/lib/db";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -12,18 +13,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { text } = await request.json();
+    const { text, speed: overrideSpeed } = await request.json();
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
+
+    // Use override speed (for previews) or fetch user's preference
+    const speed = overrideSpeed ?? await getUserTtsSpeed(session.userId);
 
     // Generate speech
     const response = await openai.audio.speech.create({
       model: "tts-1",
       voice: "nova",
       input: text,
-      speed: 0.85, // Slightly slower for language learning
+      speed,
       response_format: "mp3",
     });
 
