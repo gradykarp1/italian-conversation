@@ -3,7 +3,14 @@ import { Resend } from "resend";
 import crypto from "crypto";
 import { getUserByEmail, createPasswordResetToken, initDatabase } from "@/lib/db";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend: Resend;
+
+function getResend() {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
     // Send email
     const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://italiano.gradykarp.com"}/reset-password?token=${token}`;
 
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "Italian Coach <noreply@italiano.gradykarp.com>",
       to: email,
       subject: "Reset your password",
