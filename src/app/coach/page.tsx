@@ -22,6 +22,7 @@ export default function CoachPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("Loading...");
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
@@ -228,11 +229,17 @@ export default function CoachPage() {
   };
 
   const endSession = async () => {
+    // Prevent double-saving
+    if (isSaving || sessionEnded) {
+      return;
+    }
+
     if (messages.length <= 1) {
       setSessionEnded(true);
       return;
     }
 
+    setIsSaving(true);
     setStatus("Saving session...");
 
     const transcript = messages
@@ -264,6 +271,8 @@ export default function CoachPage() {
       }
     } catch (error) {
       console.error("Save error:", error);
+    } finally {
+      setIsSaving(false);
     }
 
     setSessionEnded(true);
@@ -273,6 +282,7 @@ export default function CoachPage() {
   const startNewConversation = async () => {
     setMessages([]);
     setSessionEnded(false);
+    setIsSaving(false);
     setSessionStartTime(Date.now());
 
     // Get greeting from coach
@@ -407,10 +417,10 @@ export default function CoachPage() {
             {/* End conversation button */}
             <button
               onClick={endSession}
-              disabled={isProcessing}
+              disabled={isProcessing || isSaving}
               className="w-full py-2 text-[var(--foreground)] opacity-60 hover:opacity-100 disabled:opacity-30"
             >
-              [End Conversation]
+              {isSaving ? "[Saving...]" : "[End Conversation]"}
             </button>
           </div>
         )}
