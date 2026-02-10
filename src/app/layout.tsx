@@ -10,6 +10,10 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Italian Conversation Coach",
   description: "Practice Italian conversation for PLIDA B1 certification",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
