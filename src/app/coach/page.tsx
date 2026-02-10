@@ -62,7 +62,7 @@ export default function CoachPage() {
           await playAudio(chatData.response);
         }
 
-        setStatus("Press and hold SPACE to speak");
+        setStatus("Ready");
       } catch (error) {
         console.error("Init error:", error);
         setStatus("Error starting conversation");
@@ -77,30 +77,29 @@ export default function CoachPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Keyboard handling for push-to-talk
+  // Keyboard handling - tap space to toggle recording
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat && !isRecording && !isProcessing && !sessionEnded) {
+      if (e.code === "Space" && !e.repeat && !isProcessing && !sessionEnded) {
         e.preventDefault();
-        startRecording();
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space" && isRecording) {
-        e.preventDefault();
-        stopRecording();
+        toggleRecording();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
     };
   }, [isRecording, isProcessing, sessionEnded]);
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
 
   const startRecording = async () => {
     try {
@@ -115,7 +114,7 @@ export default function CoachPage() {
 
       mediaRecorder.start();
       setIsRecording(true);
-      setStatus("Recording... (release SPACE when done)");
+      setStatus("Recording...");
     } catch (error) {
       console.error("Recording error:", error);
       setStatus("Microphone access denied");
@@ -157,7 +156,7 @@ export default function CoachPage() {
       const transcribeData = await transcribeRes.json();
 
       if (!transcribeData.text || !transcribeData.text.trim()) {
-        setStatus("Didn't catch that. Press SPACE to try again.");
+        setStatus("Didn't catch that. Try again.");
         setIsProcessing(false);
         return;
       }
@@ -189,10 +188,10 @@ export default function CoachPage() {
         await playAudio(chatData.response);
       }
 
-      setStatus("Press and hold SPACE to speak");
+      setStatus("Ready");
     } catch (error) {
       console.error("Processing error:", error);
-      setStatus("Error processing. Press SPACE to try again.");
+      setStatus("Error processing. Try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -293,7 +292,7 @@ export default function CoachPage() {
         await playAudio(chatData.response);
       }
 
-      setStatus("Press and hold SPACE to speak");
+      setStatus("Ready");
     } catch (error) {
       console.error("Start error:", error);
       setStatus("Error starting conversation");
@@ -376,24 +375,21 @@ export default function CoachPage() {
           </button>
         ) : (
           /* Active session controls */
-          <div className="space-y-2">
-            {/* Mobile record button */}
+          <div className="space-y-3">
+            {/* Record button - tap to start/stop */}
             <button
-              onTouchStart={startRecording}
-              onTouchEnd={stopRecording}
-              onMouseDown={startRecording}
-              onMouseUp={stopRecording}
+              onClick={toggleRecording}
               disabled={isProcessing}
-              className={`w-full py-4 border ${
+              className={`w-full py-6 text-lg border-2 transition-colors ${
                 isRecording
-                  ? "border-red-500 text-red-500"
-                  : "border-[var(--accent)] text-[var(--accent)]"
-              } ${isProcessing ? "opacity-50" : ""} md:hidden`}
+                  ? "border-red-500 bg-red-500/10 text-red-500"
+                  : "border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-black"
+              } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              {isRecording ? "Recording..." : "Hold to Speak"}
+              {isRecording ? "Tap or Space to Stop" : "Tap or Space to Speak"}
             </button>
 
-            {/* End conversation button - always visible */}
+            {/* End conversation button */}
             <button
               onClick={endSession}
               disabled={isProcessing}
