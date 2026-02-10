@@ -23,6 +23,7 @@ export default function CoachPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState("Loading...");
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -79,7 +80,7 @@ export default function CoachPage() {
   // Keyboard handling for push-to-talk
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat && !isRecording && !isProcessing) {
+      if (e.code === "Space" && !e.repeat && !isRecording && !isProcessing && !sessionEnded) {
         e.preventDefault();
         startRecording();
       }
@@ -99,7 +100,7 @@ export default function CoachPage() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isRecording, isProcessing]);
+  }, [isRecording, isProcessing, sessionEnded]);
 
   const startRecording = async () => {
     try {
@@ -228,7 +229,7 @@ export default function CoachPage() {
 
   const endSession = async () => {
     if (messages.length <= 1) {
-      router.push("/");
+      setSessionEnded(true);
       return;
     }
 
@@ -265,11 +266,43 @@ export default function CoachPage() {
       console.error("Save error:", error);
     }
 
-    // Logout after showing summary
-    setTimeout(async () => {
-      await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/");
-    }, 5000);
+    setSessionEnded(true);
+    setStatus("Session ended");
+  };
+
+  const startNewConversation = async () => {
+    setMessages([]);
+    setSessionEnded(false);
+    setSessionStartTime(Date.now());
+
+    // Get greeting from coach
+    setStatus("Starting conversation...");
+    try {
+      const chatRes = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isGreeting: true, history: [] }),
+      });
+
+      const chatData = await chatRes.json();
+      if (chatData.response) {
+        setMessages([{ role: "assistant", content: chatData.response }]);
+
+        // Play greeting
+        setStatus("Speaking...");
+        await playAudio(chatData.response);
+      }
+
+      setStatus("Press and hold SPACE to speak");
+    } catch (error) {
+      console.error("Start error:", error);
+      setStatus("Error starting conversation");
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
   };
 
   if (!user) {
@@ -290,11 +323,11 @@ export default function CoachPage() {
             {user.name} • {user.skillLevel}
           </p>
         </div>
-        <button
-          onClick={endSession}
-          className="text-red-500 hover:text-red-400"
+<button
+          onClick={handleLogout}
+          className="text-[var(--foreground)] opacity-60 hover:opacity-100"
         >
-          [End Session]
+          [Logout]
         </button>
       </div>
 
@@ -325,27 +358,51 @@ export default function CoachPage() {
               ? "text-red-500"
               : isProcessing
               ? "text-yellow-500"
+              : sessionEnded
+              ? "text-[var(--accent)]"
               : "text-[var(--foreground)] opacity-60"
           }`}
         >
           {status}
         </div>
 
-        {/* Mobile record button */}
-        <button
-          onTouchStart={startRecording}
-          onTouchEnd={stopRecording}
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          disabled={isProcessing}
-          className={`w-full py-4 border ${
-            isRecording
-              ? "border-red-500 text-red-500"
-              : "border-[var(--accent)] text-[var(--accent)]"
-          } ${isProcessing ? "opacity-50" : ""} md:hidden`}
-        >
-          {isRecording ? "Recording..." : "Hold to Speak"}
-        </button>
+        {sessionEnded ? (
+          /* Session ended - show new conversation button */
+          <button
+            onClick={startNewConversation}
+            className="w-full py-4 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-black transition-colors"
+          >
+            Start New Conversation
+          </button>
+        ) : (
+          /* Active session controls */
+          <div className="space-y-2">
+            {/* Mobile record button */}
+            <button
+              onTouchStart={startRecording}
+              onTouchEnd={stopRecording}
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              disabled={isProcessing}
+              className={`w-full py-4 border ${
+                isRecording
+                  ? "border-red-500 text-red-500"
+                  : "border-[var(--accent)] text-[var(--accent)]"
+              } ${isProcessing ? "opacity-50" : ""} md:hidden`}
+            >
+              {isRecording ? "Recording..." : "Hold to Speak"}
+            </button>
+
+            {/* End conversation button - always visible */}
+            <button
+              onClick={endSession}
+              disabled={isProcessing}
+              className="w-full py-2 text-[var(--foreground)] opacity-60 hover:opacity-100 disabled:opacity-30"
+            >
+              [End Conversation]
+            </button>
+          </div>
+        )}
       </div>
     </main>
   );
