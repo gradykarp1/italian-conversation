@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Message = {
   role: "user" | "assistant";
@@ -322,12 +323,20 @@ export default function CoachPage() {
             {user.name} • {user.skillLevel}
           </p>
         </div>
-<button
-          onClick={handleLogout}
-          className="text-[var(--foreground)] opacity-60 hover:opacity-100"
-        >
-          [Logout]
-        </button>
+        <div className="flex gap-4">
+          <Link
+            href="/sessions"
+            className="text-[var(--foreground)] opacity-60 hover:opacity-100"
+          >
+            [Sessions]
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-[var(--foreground)] opacity-60 hover:opacity-100"
+          >
+            [Logout]
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

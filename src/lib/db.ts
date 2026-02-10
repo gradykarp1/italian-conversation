@@ -117,6 +117,27 @@ export async function getSessionCount(userId: number) {
   return parseInt(rows[0].count);
 }
 
+export async function getUserSessions(userId: number, limit: number = 50) {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT id, date, topic, summary, skill_notes, duration_seconds
+    FROM sessions
+    WHERE user_id = ${userId}
+    ORDER BY date DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
+
+export async function getSessionById(sessionId: number, userId: number) {
+  const sql = getDb();
+  const rows = await sql`
+    SELECT * FROM sessions
+    WHERE id = ${sessionId} AND user_id = ${userId}
+  `;
+  return rows[0] || null;
+}
+
 // Password reset operations
 export async function createPasswordResetToken(userId: number, token: string, expiresAt: Date) {
   const sql = getDb();
