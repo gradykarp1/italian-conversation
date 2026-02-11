@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSession } from "@/lib/auth";
-import { getUserById, createSession, getRecentSessions, updateUserSkill, storeSessionEmbedding } from "@/lib/db";
+import { getUserById, createSession, getRecentSessions, updateUserSkill, storeSessionEmbedding, storeSessionScores } from "@/lib/db";
 import { generateEmbedding, createEmbeddingContent } from "@/lib/embeddings";
+import { generateSessionScores } from "@/lib/scoring";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -128,6 +129,15 @@ export async function POST(request: NextRequest) {
     } catch (embeddingError) {
       // Log but don't fail the request if embedding fails
       console.error("Failed to generate session embedding:", embeddingError);
+    }
+
+    // Generate and store PLIDA B1 competency scores
+    try {
+      const scores = await generateSessionScores(transcript);
+      await storeSessionScores(savedSession.id, user.id, scores);
+    } catch (scoringError) {
+      // Log but don't fail the request if scoring fails
+      console.error("Failed to generate session scores:", scoringError);
     }
 
     // Update user skill level

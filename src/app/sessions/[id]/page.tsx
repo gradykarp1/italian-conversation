@@ -14,6 +14,42 @@ type SessionData = {
   duration_seconds: number;
 };
 
+type SessionScores = {
+  fluency_coherence: number;
+  vocabulary_range: number;
+  grammar_accuracy: number;
+  grammar_range: number;
+  interaction: number;
+  overall_score: number;
+  feedback: string;
+  strengths: string;
+  areas_to_improve: string;
+};
+
+function ScoreBar({ label, score }: { label: string; score: number }) {
+  const percentage = (score / 5) * 100;
+  const getColor = (s: number) => {
+    if (s >= 4) return "bg-green-500";
+    if (s >= 3) return "bg-yellow-500";
+    return "bg-red-500";
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between text-sm mb-1">
+        <span className="text-[var(--foreground)]">{label}</span>
+        <span className="text-[var(--accent)]">{score}/5</span>
+      </div>
+      <div className="h-2 bg-[var(--border)] rounded">
+        <div
+          className={`h-full rounded ${getColor(score)}`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function SessionTranscriptPage({
   params,
 }: {
@@ -22,7 +58,9 @@ export default function SessionTranscriptPage({
   const { id } = use(params);
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
+  const [scores, setScores] = useState<SessionScores | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scoresLoading, setScoresLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -44,15 +82,25 @@ export default function SessionTranscriptPage({
         if (!sessionRes.ok) {
           setError(sessionData.error || "Failed to load session");
           setLoading(false);
+          setScoresLoading(false);
           return;
         }
 
         setSession(sessionData.session);
         setLoading(false);
+
+        // Fetch scores
+        const scoresRes = await fetch(`/api/sessions/${id}/score`);
+        if (scoresRes.ok) {
+          const scoresData = await scoresRes.json();
+          setScores(scoresData.scores);
+        }
+        setScoresLoading(false);
       } catch (err) {
         console.error("Fetch error:", err);
         setError("Failed to load session");
         setLoading(false);
+        setScoresLoading(false);
       }
     };
 
@@ -137,6 +185,63 @@ export default function SessionTranscriptPage({
           )}
         </div>
       )}
+
+      {/* PLIDA B1 Scores */}
+      <div className="mb-6 border border-[var(--border)] p-4">
+        <h2 className="text-sm text-[var(--accent)] mb-4">PLIDA B1 Assessment</h2>
+        {scoresLoading ? (
+          <p className="text-[var(--foreground)] opacity-60">Loading scores...</p>
+        ) : scores ? (
+          <div className="space-y-4">
+            {/* Score bars */}
+            <div className="grid gap-3">
+              <ScoreBar label="Fluency & Coherence" score={scores.fluency_coherence} />
+              <ScoreBar label="Vocabulary Range" score={scores.vocabulary_range} />
+              <ScoreBar label="Grammar Accuracy" score={scores.grammar_accuracy} />
+              <ScoreBar label="Grammar Range" score={scores.grammar_range} />
+              <ScoreBar label="Interaction" score={scores.interaction} />
+            </div>
+
+            {/* Overall score */}
+            <div className="pt-3 border-t border-[var(--border)]">
+              <div className="flex justify-between items-center">
+                <span className="text-[var(--foreground)]">Overall Score</span>
+                <span className="text-2xl text-[var(--accent)] font-bold">
+                  {scores.overall_score}/5
+                </span>
+              </div>
+            </div>
+
+            {/* Feedback */}
+            {scores.feedback && (
+              <div className="pt-3 border-t border-[var(--border)]">
+                <h3 className="text-sm text-[var(--accent)] mb-2">Feedback</h3>
+                <p className="text-[var(--foreground)]">{scores.feedback}</p>
+              </div>
+            )}
+
+            {/* Strengths & Areas to Improve */}
+            <div className="grid md:grid-cols-2 gap-4 pt-3 border-t border-[var(--border)]">
+              {scores.strengths && (
+                <div>
+                  <h3 className="text-sm text-green-500 mb-2">Strengths</h3>
+                  <p className="text-[var(--foreground)] text-sm">{scores.strengths}</p>
+                </div>
+              )}
+              {scores.areas_to_improve && (
+                <div>
+                  <h3 className="text-sm text-yellow-500 mb-2">Areas to Improve</h3>
+                  <p className="text-[var(--foreground)] text-sm">{scores.areas_to_improve}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[var(--foreground)] opacity-60">
+            No scores available for this session.
+          </p>
+        )}
+      </div>
 
       {/* Transcript */}
       <div className="border border-[var(--border)] p-4">
