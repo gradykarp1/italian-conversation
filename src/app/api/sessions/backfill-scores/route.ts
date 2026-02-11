@@ -1,20 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { getSessionsWithoutScores, storeSessionScores } from "@/lib/db";
+import { getSessionsWithoutScores, storeSessionScores, getUserByEmail } from "@/lib/db";
 import { generateSessionScores } from "@/lib/scoring";
 
 // Backfill scores for sessions that don't have them
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const body = await request.json().catch(() => ({}));
+    const { limit = 10, secret, email } = body;
+
+    let userId: number;
+
+    // Allow either cookie auth or secret + email
+    if (secret && secret === process.env.MIGRATION_SECRET && email) {
+      const user = await getUserByEmail(email);
+      if (!user) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      userId = user.id;
+    } else {
+      const session = await getSession();
+      if (!session) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      userId = session.userId;
     }
 
-    const { limit = 10 } = await request.json().catch(() => ({}));
-
     // Get sessions without scores
-    const sessionsToScore = await getSessionsWithoutScores(session.userId, limit);
+    const sessionsToScore = await getSessionsWithoutScores(userId, limit);
 
     if (sessionsToScore.length === 0) {
       return NextResponse.json({
@@ -33,7 +46,7 @@ export async function POST(request: NextRequest) {
         }
 
         const scores = await generateSessionScores(sessionData.transcript);
-        await storeSessionScores(sessionData.id, session.userId, scores);
+        await storeSessionScores(sessionData.id, userId, scores);
         results.push({ sessionId: sessionData.id, status: "scored", overallScore: scores.overallScore });
       } catch (error) {
         console.error(`Failed to score session ${sessionData.id}:`, error);
