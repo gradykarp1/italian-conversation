@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 
 type Session = {
   id: number;
@@ -116,8 +117,40 @@ export default function SessionsPage() {
             Analyzing your progress...
           </div>
         ) : metaSummary ? (
-          <div className="whitespace-pre-wrap text-[var(--foreground)]">
-            {metaSummary}
+          <div className="text-[var(--foreground)] prose-custom">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => (
+                  <h1 className="text-xl text-[var(--accent)] mt-6 mb-3 first:mt-0">{children}</h1>
+                ),
+                h2: ({ children }) => (
+                  <h2 className="text-lg text-[var(--accent)] mt-5 mb-2">{children}</h2>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="text-base text-[var(--accent)] mt-4 mb-2">{children}</h3>
+                ),
+                p: ({ children }) => (
+                  <p className="mb-3 leading-relaxed">{children}</p>
+                ),
+                ul: ({ children }) => (
+                  <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
+                ),
+                ol: ({ children }) => (
+                  <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>
+                ),
+                li: ({ children }) => (
+                  <li className="leading-relaxed">{children}</li>
+                ),
+                strong: ({ children }) => (
+                  <strong className="text-[var(--accent)] font-bold">{children}</strong>
+                ),
+                em: ({ children }) => (
+                  <em className="italic">{children}</em>
+                ),
+              }}
+            >
+              {metaSummary}
+            </ReactMarkdown>
           </div>
         ) : (
           <div className="text-[var(--foreground)] opacity-60">
