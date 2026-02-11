@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     let userId: number;
 
     // Allow either cookie auth or secret + email
-    if (secret && secret === process.env.MIGRATION_SECRET && email) {
+    if (secret && secret === process.env.JWT_SECRET && email) {
       const user = await getUserByEmail(email);
       if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
