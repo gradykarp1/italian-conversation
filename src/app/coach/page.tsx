@@ -236,16 +236,24 @@ export default function CoachPage() {
         return;
       }
 
-      const arrayBuffer = await res.arrayBuffer();
-      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
 
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
+      // Route through AudioContext (which is already unlocked)
+      const source = audioContextRef.current.createMediaElementSource(audio);
       source.connect(audioContextRef.current.destination);
 
       await new Promise<void>((resolve) => {
-        source.onended = () => resolve();
-        source.start(0);
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        audio.play();
       });
     } catch (error) {
       console.error("Playback error:", error);
