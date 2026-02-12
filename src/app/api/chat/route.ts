@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSession } from "@/lib/auth";
 import { getUserById, getRecentSessions, getSessionCount } from "@/lib/db";
-import { buildSystemPrompt, buildUserContext, GREETING_PROMPT } from "@/lib/prompts";
+import { buildSystemPrompt, buildUserContext, buildGreetingPrompt } from "@/lib/prompts";
 import { retrieveRelevantContext } from "@/lib/embeddings";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -54,17 +54,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build system prompt
+    // Build system prompt with user's selected personality
+    const personalityId = user.coach_personality || "maria";
     const systemPrompt = buildSystemPrompt(
       user.name,
       user.skill_level || "beginner",
-      userContext
+      userContext,
+      personalityId
     );
 
     // Build messages
     let messages: Anthropic.MessageParam[];
     if (isGreeting) {
-      messages = [{ role: "user", content: GREETING_PROMPT }];
+      messages = [{ role: "user", content: buildGreetingPrompt(personalityId) }];
     } else {
       messages = [
         ...history.map((h: { role: string; content: string }) => ({

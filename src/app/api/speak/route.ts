@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSession } from "@/lib/auth";
-import { getUserTtsSpeed } from "@/lib/db";
+import { getUserTtsSpeed, getUserPersonality } from "@/lib/db";
+import { getPersonality } from "@/lib/personalities";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { text, speed: overrideSpeed } = await request.json();
+    const { text, speed: overrideSpeed, voice: overrideVoice } = await request.json();
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
@@ -22,10 +23,20 @@ export async function POST(request: NextRequest) {
     // Use override speed (for previews) or fetch user's preference
     const speed = overrideSpeed ?? await getUserTtsSpeed(session.userId);
 
+    // Use override voice (for previews) or get voice from user's personality
+    let voice: "alloy" | "echo" | "fable" | "nova" | "onyx" | "shimmer" = "nova";
+    if (overrideVoice) {
+      voice = overrideVoice;
+    } else {
+      const personalityId = await getUserPersonality(session.userId);
+      const personality = getPersonality(personalityId);
+      voice = personality.voice;
+    }
+
     // Generate speech
     const response = await openai.audio.speech.create({
       model: "tts-1",
-      voice: "nova",
+      voice,
       input: text,
       speed,
       response_format: "mp3",

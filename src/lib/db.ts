@@ -34,6 +34,11 @@ export async function initDatabase() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS tts_speed REAL DEFAULT 0.85
   `;
 
+  // Add coach_personality column if it doesn't exist
+  await sql`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS coach_personality TEXT DEFAULT 'maria'
+  `;
+
   await sql`
     CREATE TABLE IF NOT EXISTS sessions (
       id SERIAL PRIMARY KEY,
@@ -147,6 +152,21 @@ export async function getUserTtsSpeed(userId: number): Promise<number> {
   const sql = getDb();
   const rows = await sql`SELECT tts_speed FROM users WHERE id = ${userId}`;
   return rows[0]?.tts_speed ?? 0.85;
+}
+
+export async function updateUserPersonality(userId: number, personality: string) {
+  const sql = getDb();
+  await sql`
+    UPDATE users
+    SET coach_personality = ${personality}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${userId}
+  `;
+}
+
+export async function getUserPersonality(userId: number): Promise<string> {
+  const sql = getDb();
+  const rows = await sql`SELECT coach_personality FROM users WHERE id = ${userId}`;
+  return rows[0]?.coach_personality ?? 'maria';
 }
 
 // Session operations
