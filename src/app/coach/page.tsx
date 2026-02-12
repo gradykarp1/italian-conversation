@@ -219,7 +219,10 @@ export default function CoachPage() {
       await new Promise<void>((resolve) => {
         audio.onended = () => resolve();
         audio.onerror = () => resolve();
-        audio.play();
+        audio.play().catch((err) => {
+          console.error("Audio play failed:", err);
+          resolve();
+        });
       });
 
       URL.revokeObjectURL(audioUrl);

@@ -28,9 +28,14 @@ export async function POST(request: NextRequest) {
     if (overrideVoice) {
       voice = overrideVoice;
     } else {
-      const personalityId = await getUserPersonality(session.userId);
-      const personality = getPersonality(personalityId);
-      voice = personality.voice;
+      try {
+        const personalityId = await getUserPersonality(session.userId);
+        const personality = getPersonality(personalityId);
+        voice = personality.voice;
+      } catch (err) {
+        console.error("Failed to get personality, using default voice:", err);
+        // voice stays as "nova" default
+      }
     }
 
     // Generate speech
