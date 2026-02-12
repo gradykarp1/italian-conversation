@@ -26,34 +26,17 @@ export default function CoachPage() {
   const [status, setStatus] = useState("Loading...");
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [conversationStarted, setConversationStarted] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<string | null>(null);
 
-  // Unlock audio context on first user interaction
-  const unlockAudio = () => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
-    }
-    if (audioContextRef.current.state === "suspended") {
-      audioContextRef.current.resume();
-    }
-    // Play any queued audio (like the greeting)
-    if (audioQueueRef.current) {
-      const queuedText = audioQueueRef.current;
-      audioQueueRef.current = null;
-      playAudio(queuedText);
-    }
-  };
-
-  // Check auth and start conversation
+  // Check auth on mount
   useEffect(() => {
-    const init = async () => {
+    const checkAuth = async () => {
       try {
-        // Check auth
         const authRes = await fetch("/api/auth/me");
         const authData = await authRes.json();
 
@@ -63,44 +46,62 @@ export default function CoachPage() {
         }
 
         setUser(authData.user);
-        setSessionStartTime(Date.now());
-
-        // Get greeting from coach
-        setStatus("Starting conversation...");
-        const chatRes = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isGreeting: true, history: [] }),
-        });
-
-        const chatData = await chatRes.json();
-        if (chatData.response) {
-          setMessages([{ role: "assistant", content: chatData.response }]);
-
-          // Play greeting
-          setStatus("Speaking...");
-          await playAudio(chatData.response);
-        }
-
-        setStatus("Ready");
+        setStatus("Ready to start");
       } catch (error) {
-        console.error("Init error:", error);
-        setStatus("Error starting conversation");
+        console.error("Auth error:", error);
+        setStatus("Error checking auth");
       }
     };
 
-    init();
+    checkAuth();
   }, [router]);
+
+  // Start conversation - called on user click
+  const startConversation = async () => {
+    // Unlock audio on user interaction
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    if (audioContextRef.current.state === "suspended") {
+      await audioContextRef.current.resume();
+    }
+
+    setConversationStarted(true);
+    setSessionStartTime(Date.now());
+    setStatus("Starting conversation...");
+
+    try {
+      const chatRes = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isGreeting: true, history: [] }),
+      });
+
+      const chatData = await chatRes.json();
+      if (chatData.response) {
+        setMessages([{ role: "assistant", content: chatData.response }]);
+
+        // Play greeting - audio context is now unlocked
+        setStatus("Speaking...");
+        await playAudio(chatData.response);
+      }
+
+      setStatus("Ready");
+    } catch (error) {
+      console.error("Start error:", error);
+      setStatus("Error starting conversation");
+    }
+  };
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Keyboard handling - tap space to toggle recording
+  // Keyboard handling - tap space to toggle recording (only when conversation started)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat && !isProcessing && !sessionEnded) {
+      if (e.code === "Space" && !e.repeat && !isProcessing && !sessionEnded && conversationStarted) {
         e.preventDefault();
         toggleRecording();
       }
@@ -111,10 +112,9 @@ export default function CoachPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isRecording, isProcessing, sessionEnded]);
+  }, [isRecording, isProcessing, sessionEnded, conversationStarted]);
 
   const toggleRecording = () => {
-    unlockAudio();
     if (isRecording) {
       stopRecording();
     } else {
@@ -220,9 +220,8 @@ export default function CoachPage() {
 
   const playAudio = async (text: string) => {
     try {
-      // If audio context isn't ready, queue for later
       if (!audioContextRef.current || audioContextRef.current.state === "suspended") {
-        audioQueueRef.current = text;
+        console.error("Audio context not ready");
         return;
       }
 
@@ -305,7 +304,14 @@ export default function CoachPage() {
   };
 
   const startNewConversation = async () => {
-    unlockAudio();
+    // Unlock audio on user interaction
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    if (audioContextRef.current.state === "suspended") {
+      await audioContextRef.current.resume();
+    }
+
     setMessages([]);
     setSessionEnded(false);
     setIsSaving(false);
@@ -416,7 +422,15 @@ export default function CoachPage() {
           {status}
         </div>
 
-        {sessionEnded ? (
+        {!conversationStarted ? (
+          /* Initial state - show start button */
+          <button
+            onClick={startConversation}
+            className="w-full py-6 text-lg border-2 border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-black transition-colors"
+          >
+            Start Conversation
+          </button>
+        ) : sessionEnded ? (
           /* Session ended - show new conversation button */
           <button
             onClick={startNewConversation}
