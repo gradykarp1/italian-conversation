@@ -30,6 +30,24 @@ export default function CoachPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioQueueRef = useRef<string | null>(null);
+
+  // Unlock audio context on first user interaction
+  const unlockAudio = () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+    }
+    if (audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
+    // Play any queued audio (like the greeting)
+    if (audioQueueRef.current) {
+      const queuedText = audioQueueRef.current;
+      audioQueueRef.current = null;
+      playAudio(queuedText);
+    }
+  };
 
   // Check auth and start conversation
   useEffect(() => {
@@ -96,6 +114,7 @@ export default function CoachPage() {
   }, [isRecording, isProcessing, sessionEnded]);
 
   const toggleRecording = () => {
+    unlockAudio();
     if (isRecording) {
       stopRecording();
     } else {
@@ -201,6 +220,12 @@ export default function CoachPage() {
 
   const playAudio = async (text: string) => {
     try {
+      // If audio context isn't ready, queue for later
+      if (!audioContextRef.current || audioContextRef.current.state === "suspended") {
+        audioQueueRef.current = text;
+        return;
+      }
+
       const res = await fetch("/api/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,20 +237,17 @@ export default function CoachPage() {
         return;
       }
 
-      const audioBlob = await res.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
+      const arrayBuffer = await res.arrayBuffer();
+      const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
 
       await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.play().catch((err) => {
-          console.error("Audio play failed:", err);
-          resolve();
-        });
+        source.onended = () => resolve();
+        source.start(0);
       });
-
-      URL.revokeObjectURL(audioUrl);
     } catch (error) {
       console.error("Playback error:", error);
     }
@@ -283,6 +305,7 @@ export default function CoachPage() {
   };
 
   const startNewConversation = async () => {
+    unlockAudio();
     setMessages([]);
     setSessionEnded(false);
     setIsSaving(false);
